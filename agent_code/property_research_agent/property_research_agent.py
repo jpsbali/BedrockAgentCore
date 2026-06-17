@@ -1,9 +1,13 @@
 import io
 import os
 import threading
+import botocore.config
 from typing import List
+from uuid import uuid4
 
 import boto3
+from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from PIL import Image as PILImage
 from pydantic import BaseModel, Field
@@ -17,6 +21,10 @@ from strands_tools.code_interpreter import AgentCoreCodeInterpreter
 
 APP = BedrockAgentCoreApp(debug=False)
 TASK_RESULTS = {}
+
+MEMORY_ID = os.getenv("MEMORY_ID", "")
+REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+BOTO_CONFIG = botocore.config.Config(retries={"max_attempts": 6, "mode": "adaptive"})
 
 
 class PropertyInfo(BaseModel):
@@ -102,6 +110,20 @@ Use code interpreter to calculate annual tax (assessed value * 0.0056).
 """
 
 
+def _make_session_manager(actor_id: str) -> AgentCoreMemorySessionManager | None:
+    if not MEMORY_ID:
+        return None
+    return AgentCoreMemorySessionManager(
+        agentcore_memory_config=AgentCoreMemoryConfig(
+            memory_id=MEMORY_ID,
+            session_id=f"session-{uuid4()}",
+            actor_id=actor_id,
+        ),
+        region_name=REGION,
+        boto_client_config=BOTO_CONFIG,
+    )
+
+
 def upload_to_s3(bucket_name: str, key: str, data: bytes, content_type: str) -> str:
     s3 = boto3.client("s3")
     s3.put_object(Bucket=bucket_name, Key=key, Body=data, ContentType=content_type)
@@ -141,6 +163,7 @@ def research_property_background(
             system_prompt=PROPERTY_RESEARCH_PROMPT,
             tools=[browser.browser, code_interpreter.code_interpreter],
             hooks=[capture_hooks],
+            session_manager=_make_session_manager(f"property-research-{uuid4()}"),
         )
 
         result = agent(

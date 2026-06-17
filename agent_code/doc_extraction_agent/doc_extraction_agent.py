@@ -1,9 +1,13 @@
 import base64
 import io
 import os
+import botocore.config
 from enum import Enum
+from uuid import uuid4
 
 import pdfplumber
+from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from pydantic import BaseModel, Field
 from strands import Agent
@@ -69,6 +73,23 @@ EXTRACTION_MODELS = {
 APP = BedrockAgentCoreApp()
 
 MODEL_ID = os.getenv("MODEL_ID", "global.anthropic.claude-sonnet-4-6")
+MEMORY_ID = os.getenv("MEMORY_ID", "")
+REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+BOTO_CONFIG = botocore.config.Config(retries={"max_attempts": 6, "mode": "adaptive"})
+
+
+def _make_session_manager(actor_id: str) -> AgentCoreMemorySessionManager | None:
+    if not MEMORY_ID:
+        return None
+    return AgentCoreMemorySessionManager(
+        agentcore_memory_config=AgentCoreMemoryConfig(
+            memory_id=MEMORY_ID,
+            session_id=f"session-{uuid4()}",
+            actor_id=actor_id,
+        ),
+        region_name=REGION,
+        boto_client_config=BOTO_CONFIG,
+    )
 
 
 def classify_and_extract(image_bytes: bytes) -> dict:
@@ -78,6 +99,7 @@ def classify_and_extract(image_bytes: bytes) -> dict:
     classify_agent = Agent(
         model=model,
         system_prompt="Classify documents into: MortgageApplication, W2Form, PayStub, DriverLicense, or Unknown.",
+        session_manager=_make_session_manager(f"doc-classify-{uuid4()}"),
     )
     content: list[ContentBlock] = [
         {"text": "Classify this document."},
@@ -93,6 +115,7 @@ def classify_and_extract(image_bytes: bytes) -> dict:
     extract_agent = Agent(
         model=model,
         system_prompt=f"Extract all fields from this {doc_type.value} document.",
+        session_manager=_make_session_manager(f"doc-extract-{uuid4()}"),
     )
     extract_content: list[ContentBlock] = [
         {"text": f"Extract information from this {doc_type.value}."},

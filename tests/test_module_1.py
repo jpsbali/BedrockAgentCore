@@ -67,7 +67,7 @@ def test_remote():
     client = get_agentcore_client()
     print_input(SAMPLE_INPUT)
     with console.status("[bold]Invoking consolidation agent (remote, may cold-start ~60s)..."):
-        result, _ = invoke_agent(client, arn, SAMPLE_INPUT)
+        result, _ = invoke_agent(client, arn, SAMPLE_INPUT, runtime_user_id="workshop-user")
     return result
 
 

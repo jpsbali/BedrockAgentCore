@@ -1,5 +1,9 @@
 import os
+import botocore.config
+from uuid import uuid4
 
+from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from mcp.client.streamable_http import streamablehttp_client
 from strands import Agent
@@ -34,17 +38,31 @@ MODEL = BedrockModel(
 
 APP = BedrockAgentCoreApp()
 
-# Detect mode: if OAUTH2_ID_PROVIDER is set, use OAuth2; otherwise connect without auth
 OAUTH2_ID_PROVIDER = os.getenv("OAUTH2_ID_PROVIDER", "")
+MEMORY_ID = os.getenv("MEMORY_ID", "")
+REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+BOTO_CONFIG = botocore.config.Config(retries={"max_attempts": 6, "mode": "adaptive"})
+
+
+def _make_session_manager(actor_id: str) -> AgentCoreMemorySessionManager | None:
+    if not MEMORY_ID:
+        return None
+    return AgentCoreMemorySessionManager(
+        agentcore_memory_config=AgentCoreMemoryConfig(
+            memory_id=MEMORY_ID,
+            session_id=f"session-{uuid4()}",
+            actor_id=actor_id,
+        ),
+        region_name=REGION,
+        boto_client_config=BOTO_CONFIG,
+    )
 
 
 def _create_mcp_client_local(mcp_url: str) -> MCPClient:
-    """Local mode: connect to MCP server without authentication."""
     return MCPClient(lambda: streamablehttp_client(mcp_url))
 
 
 def _create_mcp_client_remote(mcp_url: str) -> MCPClient:
-    """Remote mode: connect to MCP server with OAuth2 bearer token."""
     from bedrock_agentcore.identity.auth import requires_access_token
 
     @requires_access_token(
@@ -71,7 +89,12 @@ def initialize_kyc_agent(mcp_url: str) -> tuple[MCPClient, Agent]:
 
     with mcp_client:
         tools = mcp_client.list_tools_sync()
-        agent = Agent(model=MODEL, system_prompt=KYC_RESEARCH_AGENT_PROMPT, tools=tools)
+        agent = Agent(
+            model=MODEL,
+            system_prompt=KYC_RESEARCH_AGENT_PROMPT,
+            tools=tools,
+            session_manager=_make_session_manager(f"kyc-agent-{uuid4()}"),
+        )
     return mcp_client, agent
 
 
