@@ -1,0 +1,6 @@
+bedrock-agentcore>=1.0.3
+strands-agents>=1.9.0
+strands-agents-tools[agent-core-browser,agent-core-code-interpreter]>=0.2.8
+boto3>=1.40.0
+Pillow>=11.0.0
+pydantic>=2.0.0
