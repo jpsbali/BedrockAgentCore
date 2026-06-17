@@ -1,0 +1,62 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Nominatim Address Search API",
+        "description": "OpenStreetMap Nominatim API for address geocoding and search",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "https://nominatim.openstreetmap.org",
+            "description": "OpenStreetMap Nominatim API"
+        }
+    ],
+    "paths": {
+        "/search": {
+            "get": {
+                "operationId": "searchAddress",
+                "summary": "Search for an address",
+                "description": "Retrieves address information and geocoding data from OpenStreetMap",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "The address to search for",
+                        "required": true,
+                        "schema": { "type": "string" }
+                    },
+                    {
+                        "name": "format",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": ["json"],
+                            "default": "json"
+                        }
+                    },
+                    {
+                        "name": "addressdetails",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [0, 1],
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "schema": { "type": "integer", "default": 5 }
+                    },
+                    {
+                        "name": "countrycodes",
+                        "in": "query",
+                        "schema": { "type": "string" }
+                    }
+                ],
+                "responses": { "200": { "description": "Successful response" } }
+            }
+        }
+    }
+}
